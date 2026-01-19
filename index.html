@@ -9,27 +9,24 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- 2. 核心依赖: React, ReactDOM, Babel, Lucide -->
-    <!-- 使用 UMD 版本，这是最“古老”但最兼容的方式，不需要 npm install -->
+    <!-- 使用 UMD 版本，确保在任何静态服务器上都能运行 -->
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    <script crossorigin src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-      /* 基础样式重置 */
       body { margin: 0; background-color: #0f172a; color: white; font-family: sans-serif; overflow: hidden; }
       #root { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
       
-      /* 滚动条美化 */
       ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: #1e293b; }
       ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: #64748b; }
       
-      /* 加载动画 */
       .spinner {
-        border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 3px solid #eab308;
-        width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block;
+        border: 2px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 2px solid white;
+        width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block;
       }
       @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -48,427 +45,367 @@
 <body>
     <div id="root"></div>
 
-    <!-- 3. 应用程序逻辑 (Babel 编译) -->
     <script type="text/babel">
-        const { useState, useEffect, useRef, forwardRef, useImperativeHandle, useMemo } = React;
+        /************************************************************
+         * 1. 初始化依赖与常量
+         ************************************************************/
+        const { useState, useEffect, useRef, forwardRef, useImperativeHandle } = React;
         const { createRoot } = ReactDOM;
-        
-        // 获取图标
         const { 
             Sparkles, Image: ImageIcon, RotateCcw, Info, Download, 
             Code: CodeIcon, X, Palette, Scan, Sliders, Activity, 
             Layers, Grid, Grid3X3, ArrowRight, Eraser, Eclipse, 
-            Skull, Bomb, ArrowDownToLine, Key, Play 
-        } = lucide;
+            Skull, Bomb, ArrowDownToLine, Key, Play, Settings
+        } = lucideReact;
 
-        // --- 常量定义 ---
         const DEFAULT_POTATO_SVG = `data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%20200%20200%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M100%2040c-40%200-70%2030-70%2070%200%2050%2030%2080%2070%2080s70-30%2070-80c0-40-30-70-70-70z%22%20fill%3D%22%23eab308%22%2F%3E%3Ccircle%20cx%3D%2275%22%20cy%3D%22100%22%20r%3D%2210%22%20fill%3D%22black%22%2F%3E%3Ccircle%20cx%3D%22125%22%20cy%3D%22100%22%20r%3D%2210%22%20fill%3D%22black%22%2F%3E%3Cpath%20d%3D%22M90%20130%20q10%2010%2020%200%22%20stroke%3D%22black%22%20stroke-width%3D%225%22%20fill%3D%22none%22%2F%3E%3C%2Fsvg%3E`;
 
         const AnimationState = { IDLE: 'IDLE', WALK: 'WALK', ATTACK: 'ATTACK', HIT: 'HIT', DEATH: 'DEATH' };
         const STATE_LABELS = { IDLE: '待机 (Idle)', WALK: '行走 (Walk)', ATTACK: '攻击 (Attack)', HIT: '受击 (Hit)', DEATH: '死亡 (Death)' };
 
+        const DEFAULT_SHADOW = { enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 };
         const DEFAULT_CONFIGS = {
-            IDLE: { speed: 1.5, squashAmount: 0.02, stretchAmount: 0.02, landSquash: 0.05, rotationMax: 0, bounceHeight: 5, wobbleSpeed: 1, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 },
-            WALK: { speed: 8, squashAmount: 0.1, stretchAmount: 0.05, landSquash: 0.15, rotationMax: 10, bounceHeight: 15, wobbleSpeed: 2, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 },
-            ATTACK: { speed: 15, squashAmount: 0.2, stretchAmount: 0.3, landSquash: 0.1, rotationMax: 5, bounceHeight: 0, wobbleSpeed: 4, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 },
-            HIT: { speed: 20, squashAmount: 0.3, stretchAmount: 0.1, landSquash: 0, rotationMax: 20, bounceHeight: 0, wobbleSpeed: 5, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 },
-            DEATH: { speed: 3, squashAmount: 0.6, stretchAmount: 0.9, landSquash: 0, rotationMax: 5, bounceHeight: 0, wobbleSpeed: 1.0, jitterIntensity: 15, jitterSpeed: 40, shatterIntensity: 0, enableShadow: true, shadowOpacity: 0.2, shadowScale: 1.0, shadowOffsetY: 0 }
+            IDLE: { speed: 1.5, squashAmount: 0.02, stretchAmount: 0.02, landSquash: 0.05, rotationMax: 0, bounceHeight: 5, wobbleSpeed: 1, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, ...DEFAULT_SHADOW },
+            WALK: { speed: 8, squashAmount: 0.1, stretchAmount: 0.05, landSquash: 0.15, rotationMax: 10, bounceHeight: 15, wobbleSpeed: 2, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, ...DEFAULT_SHADOW },
+            ATTACK: { speed: 15, squashAmount: 0.2, stretchAmount: 0.3, landSquash: 0.1, rotationMax: 5, bounceHeight: 0, wobbleSpeed: 4, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, ...DEFAULT_SHADOW },
+            HIT: { speed: 20, squashAmount: 0.3, stretchAmount: 0.1, landSquash: 0, rotationMax: 20, bounceHeight: 0, wobbleSpeed: 5, jitterIntensity: 0, jitterSpeed: 0, shatterIntensity: 0, ...DEFAULT_SHADOW },
+            DEATH: { speed: 3, squashAmount: 0.6, stretchAmount: 0.9, landSquash: 0, rotationMax: 5, bounceHeight: 0, wobbleSpeed: 1.0, jitterIntensity: 15, jitterSpeed: 40, shatterIntensity: 0, ...DEFAULT_SHADOW }
         };
+        const DEFAULT_EXPORT_CONFIG = { layout: 'GRID', cellWidth: 256, cellHeight: 256, frameCount: 16, fps: 12, chromaKey: { enabled: false, color: '#00ff00', tolerance: 20, feather: 5, spill: 50 } };
 
-        // --- 服务：图片缩放 ---
-        const resizeImage = (dataUrl, size) => {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = size;
-                    canvas.height = size;
-                    const ctx = canvas.getContext('2d');
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    ctx.drawImage(img, 0, 0, size, size);
-                    resolve(canvas.toDataURL('image/png'));
-                };
-                img.onerror = () => resolve(dataUrl);
-                img.src = dataUrl;
-            });
-        };
-
-        // --- 服务：Gemini API (Fetch 纯净版) ---
-        const generateSprite = async (apiKey, prompt, bgColorDescription, targetSize) => {
-            if (!apiKey) throw new Error("请输入 API Key");
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
-            const payload = {
-                contents: [{
-                    parts: [{
-                        text: `Create a 2D game sprite of ${prompt}. 
-                               Style: Vector art, flat colors, thick outlines, cute, 'Brotato' or 'Vampire Survivors' style.
-                               View: Front facing.
-                               Background: ${bgColorDescription} background. Solid color, no patterns.
-                               IMPORTANT: No shadow under feet, No UI, Centered.`
-                    }]
-                }]
+        /************************************************************
+         * 2. 服务与工具 (Service & Utils)
+         ************************************************************/
+        const resizeImage = (dataUrl, size) => new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const cvs = document.createElement('canvas');
+                cvs.width = size; cvs.height = size;
+                const ctx = cvs.getContext('2d');
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, size, size);
+                resolve(cvs.toDataURL('image/png'));
             };
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`API 报错: ${errText}`);
-            }
-            const data = await response.json();
-            let base64Image = '';
-            try { base64Image = data.candidates[0].content.parts.find(p => p.inlineData).inlineData.data; } 
-            catch (e) { throw new Error("API返回成功但未包含图片数据。"); }
-            return await resizeImage(`data:image/png;base64,${base64Image}`, targetSize);
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        });
+
+        const generateSprite = async (apiKey, prompt, bgColorDesc, size) => {
+            if (!apiKey) throw new Error("请输入 API Key");
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
+            const body = {
+                contents: [{ parts: [{ text: `Create a 2D game sprite of ${prompt}. Style: Vector art, flat colors, thick outlines, cute, 'Brotato' or 'Vampire Survivors' style. View: Front facing. Background: ${bgColorDesc} background. Solid color. IMPORTANT: No shadow under feet, No UI, Centered.` }] }]
+            };
+            const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            if (!res.ok) throw new Error((await res.text()));
+            const data = await res.json();
+            const b64 = data.candidates?.[0]?.content?.parts?.find(p=>p.inlineData)?.inlineData?.data;
+            if (!b64) throw new Error("未生成图片");
+            return await resizeImage(`data:image/png;base64,${b64}`, size);
         };
 
-        // --- 算法：碎片生成 ---
-        const generateShards = (width, height, cols=4, rows=4) => {
-            const shards = [];
-            const cellW = width / cols, cellH = height / rows;
-            for (let r=0; r<rows; r++) {
-                for (let c=0; c<cols; c++) {
-                    const cx = (c + 0.5) * cellW;
-                    const cy = (r + 0.5) * cellH;
-                    const imgCx = width/2, imgCy = height/2;
-                    const dirX = cx - imgCx, dirY = cy - imgCy;
-                    const mag = Math.sqrt(dirX*dirX + dirY*dirY) || 1;
+        const generateShards = (w, h) => {
+            const shards = [], cols=4, rows=4, cw=w/cols, ch=h/rows;
+            for(let r=0; r<rows; r++) {
+                for(let c=0; c<cols; c++) {
+                    const cx = (c+0.5)*cw, cy = (r+0.5)*ch;
+                    const dx = cx - w/2, dy = cy - h/2, mag = Math.sqrt(dx*dx+dy*dy)||1;
                     shards.push({
-                        center: { x: cx - imgCx, y: cy - imgCy },
-                        // 简化的四边形切片
-                        points: [
-                            {x: -cellW/2, y: -cellH/2}, {x: cellW/2, y: -cellH/2},
-                            {x: cellW/2, y: cellH/2}, {x: -cellW/2, y: cellH/2}
-                        ],
-                        velocity: { x: (dirX/mag) + (Math.random()-0.5), y: (dirY/mag) - 0.5 },
-                        rotationSpeed: (Math.random()-0.5)*10
+                        center: {x: cx-w/2, y: cy-h/2},
+                        points: [{x:-cw/2,y:-ch/2},{x:cw/2,y:-ch/2},{x:cw/2,y:ch/2},{x:-cw/2,y:ch/2}],
+                        velocity: {x: dx/mag+(Math.random()-0.5), y: dy/mag-0.5},
+                        rotSpd: (Math.random()-0.5)*10
                     });
                 }
             }
             return shards;
         };
 
-        // --- 组件：Canvas 预览 ---
-        const CanvasPreview = forwardRef(({ imageSrc, config, exportConfig, currentState }, ref) => {
-            const canvasRef = useRef(null);
-            const originalImageRef = useRef(new Image());
-            const processedImageRef = useRef(null);
-            const requestRef = useRef(0);
-            const timeRef = useRef(0);
-            const [viewMode, setViewMode] = useState('LIVE');
-            const [isProcessing, setIsProcessing] = useState(false);
-            const shardCache = useRef([]);
+        /************************************************************
+         * 3. 组件 (Components)
+         ************************************************************/
+        
+        // --- 控制面板 ---
+        const ControlPanel = ({ config, setConfig, currentState, onStateChange, exportConfig, setExportConfig }) => {
+            const handleParam = (k, v) => setConfig({...config, [k]: parseFloat(v)});
+            const handleChroma = (k, v) => setExportConfig({...exportConfig, chromaKey: {...exportConfig.chromaKey, [k]: v}});
+            
+            return (
+                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl h-full flex flex-col gap-4 overflow-y-auto">
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2"><Activity className="w-4 h-4 text-yellow-400"/> 动画状态</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            {Object.keys(AnimationState).map(k => (
+                                <button key={k} onClick={()=>onStateChange(k)} className={`py-1.5 rounded text-xs font-bold ${currentState===k?'bg-yellow-500 text-black':'bg-slate-700 text-slate-300'}`}>{STATE_LABELS[k]}</button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {currentState === 'DEATH' && (
+                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 space-y-3">
+                            <h3 className="text-xs font-bold text-red-400 flex items-center gap-2"><Skull className="w-3 h-3"/> 死亡特调</h3>
+                            <div><span className="text-[10px] text-red-300">震动 (Jitter)</span><input type="range" min="0" max="50" value={config.jitterIntensity} onChange={e=>handleParam('jitterIntensity',e.target.value)} className="w-full h-1 accent-red-500 bg-slate-700 rounded"/></div>
+                            <div><span className="text-[10px] text-red-300">碎裂 (Shatter)</span><input type="range" min="0" max="50" value={config.shatterIntensity} onChange={e=>handleParam('shatterIntensity',e.target.value)} className="w-full h-1 accent-red-500 bg-slate-700 rounded"/></div>
+                        </div>
+                    )}
 
-            // 图片加载
+                    <div className="space-y-3">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2"><Sliders className="w-4 h-4 text-blue-400"/> 参数微调</h3>
+                        <div className="flex justify-between items-center text-xs text-slate-400">
+                             <span>投影 (Shadow)</span>
+                             <input type="checkbox" checked={config.enableShadow} onChange={e=>setConfig({...config, enableShadow:e.target.checked})} />
+                        </div>
+                        <div><span className="text-[10px] text-slate-500">速度 (Speed)</span><input type="range" min="0" max="30" step="0.1" value={config.speed} onChange={e=>handleParam('speed',e.target.value)} className="w-full h-1 accent-blue-500 bg-slate-600 rounded"/></div>
+                        <div><span className="text-[10px] text-green-500">挤压 (Squash)</span><input type="range" min="0" max="1" step="0.01" value={config.squashAmount} onChange={e=>handleParam('squashAmount',e.target.value)} className="w-full h-1 accent-green-500 bg-slate-600 rounded"/></div>
+                        {currentState!=='DEATH' && <div><span className="text-[10px] text-orange-500">落地 (Land)</span><input type="range" min="0" max="0.5" step="0.01" value={config.landSquash} onChange={e=>handleParam('landSquash',e.target.value)} className="w-full h-1 accent-orange-500 bg-slate-600 rounded"/></div>}
+                        <div><span className="text-[10px] text-red-500">旋转 (Rotation)</span><input type="range" min="0" max="90" value={config.rotationMax} onChange={e=>handleParam('rotationMax',e.target.value)} className="w-full h-1 accent-red-500 bg-slate-600 rounded"/></div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-700 space-y-3">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2"><Layers className="w-4 h-4 text-orange-400"/> 导出设置</h3>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                             <div><label className="text-slate-500">宽 px</label><select value={exportConfig.cellWidth} onChange={e=>setExportConfig({...exportConfig, cellWidth:parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-600 rounded p-1">{[128,256,512].map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                             <div><label className="text-slate-500">帧数</label><select value={exportConfig.frameCount} onChange={e=>setExportConfig({...exportConfig, frameCount:parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-600 rounded p-1">{[8,16,32,60].map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                        </div>
+                        <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs text-pink-400 font-bold flex gap-1"><Eraser className="w-3 h-3"/> 去除背景</span>
+                                <input type="checkbox" checked={exportConfig.chromaKey.enabled} onChange={e=>handleChroma('enabled',e.target.checked)}/>
+                            </div>
+                            {exportConfig.chromaKey.enabled && (
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 text-xs text-slate-500">颜色 <input type="color" value={exportConfig.chromaKey.color} onChange={e=>handleChroma('color',e.target.value)} className="h-4 w-6 p-0 border-0"/></div>
+                                    <div><span className="text-[10px] text-slate-500">容差</span><input type="range" min="1" max="100" value={exportConfig.chromaKey.tolerance} onChange={e=>handleChroma('tolerance',parseInt(e.target.value))} className="w-full h-1 accent-pink-500 bg-slate-700 rounded"/></div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 画布预览 ---
+        const CanvasPreview = forwardRef(({ imageSrc, config, exportConfig, currentState }, ref) => {
+            const cvsRef = useRef();
+            const imgRef = useRef(new Image());
+            const processedRef = useRef();
+            const timeRef = useRef(0);
+            const reqRef = useRef();
+            const shardCache = useRef([]);
+            const [view, setView] = useState('LIVE');
+            const [processing, setProcessing] = useState(false);
+
             useEffect(() => {
-                const img = originalImageRef.current;
-                img.src = imageSrc;
-                img.onload = () => {
-                    processedImageRef.current = img;
-                    shardCache.current = generateShards(img.width, img.height);
-                };
-            }, [imageSrc]);
+                if (config.shatterIntensity > 0 && imgRef.current.complete) shardCache.current = generateShards(imgRef.current.width, imgRef.current.height);
+            }, [config.shatterIntensity, imageSrc]);
 
             // 绿幕处理
             useEffect(() => {
-                if (!exportConfig.chromaKey.enabled || !originalImageRef.current.complete) {
-                     if (originalImageRef.current.complete) processedImageRef.current = originalImageRef.current;
-                     return;
-                }
-                const img = originalImageRef.current;
-                const canvas = document.createElement('canvas');
-                canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
-                const data = imgData.data;
-                const hex = exportConfig.chromaKey.color;
-                const keyR = parseInt(hex.slice(1,3),16), keyG = parseInt(hex.slice(3,5),16), keyB = parseInt(hex.slice(5,7),16);
-                const tol = exportConfig.chromaKey.tolerance;
-                
-                for(let i=0; i<data.length; i+=4) {
-                    const r=data[i], g=data[i+1], b=data[i+2];
-                    const dist = Math.sqrt((r-keyR)**2 + (g-keyG)**2 + (b-keyB)**2);
-                    if(dist < tol) data[i+3] = 0; // 简单粗暴的扣除
-                }
-                ctx.putImageData(imgData, 0, 0);
-                const newImg = new Image();
-                newImg.src = canvas.toDataURL();
-                newImg.onload = () => processedImageRef.current = newImg;
-            }, [exportConfig.chromaKey, imageSrc]);
+                const doProcess = () => {
+                    const img = imgRef.current;
+                    if(!img.complete || !img.naturalWidth) return;
+                    if(!exportConfig.chromaKey.enabled) { processedRef.current = img; return; }
+                    
+                    setProcessing(true);
+                    const cvs = document.createElement('canvas');
+                    cvs.width = img.naturalWidth; cvs.height = img.naturalHeight;
+                    const ctx = cvs.getContext('2d');
+                    ctx.drawImage(img,0,0);
+                    const idata = ctx.getImageData(0,0,cvs.width,cvs.height), d = idata.data;
+                    const hex = exportConfig.chromaKey.color;
+                    const kr = parseInt(hex.slice(1,3),16), kg = parseInt(hex.slice(3,5),16), kb = parseInt(hex.slice(5,7),16);
+                    const tol = exportConfig.chromaKey.tolerance;
 
-            // 绘制单帧
+                    for(let i=0; i<d.length; i+=4) {
+                        const dist = Math.sqrt((d[i]-kr)**2 + (d[i+1]-kg)**2 + (d[i+2]-kb)**2);
+                        if(dist < tol) d[i+3] = 0;
+                    }
+                    ctx.putImageData(idata,0,0);
+                    const nImg = new Image();
+                    nImg.onload = () => { processedRef.current = nImg; setProcessing(false); };
+                    nImg.src = cvs.toDataURL();
+                };
+                doProcess();
+            }, [imageSrc, exportConfig.chromaKey]);
+
             const drawFrame = (ctx, img, cx, cy, w, h, t, cfg) => {
-                if(!img || !img.complete) return;
-                let sx=1, sy=1, rot=0, bounce=0, gray=0, deathP=0;
-
-                if (currentState === AnimationState.DEATH) {
-                     const cycle = Math.sin(t * cfg.wobbleSpeed - Math.PI/2);
-                     deathP = Math.min(Math.max((cycle+0.8)/1.8, 0), 1);
-                     sx = 1 + deathP * cfg.squashAmount;
-                     sy = 1 - deathP * cfg.stretchAmount;
-                     if(deathP > 0 && deathP < 0.95) {
-                         const shake = Math.sin(t * (cfg.jitterSpeed||1)) * ((1-deathP) * (cfg.jitterIntensity||0));
-                         rot = shake * (Math.PI/180);
-                         cx += Math.cos(t*10)*shake*0.5;
-                     }
-                     rot += deathP * (cfg.rotationMax * Math.PI/180);
-                     gray = deathP * 100;
-                } else {
-                     const sinVal = Math.sin(t * cfg.wobbleSpeed);
-                     const absSin = Math.abs(sinVal);
-                     sx = 1 + sinVal * cfg.squashAmount;
-                     sy = 1 - sinVal * cfg.stretchAmount;
-                     if(cfg.landSquash) {
-                         const impact = Math.pow(1-absSin, 3);
-                         sy -= impact * cfg.landSquash;
-                         sx += impact * cfg.landSquash * 1.5;
-                     }
-                     rot = Math.cos(t * cfg.wobbleSpeed) * (cfg.rotationMax * Math.PI/180);
-                     bounce = absSin * cfg.bounceHeight;
-                }
-
-                const scaleRef = Math.min(w,h)/200;
-                const bouncePx = bounce * scaleRef;
+                if(!img.complete) return;
+                let sx=1, sy=1, rot=0, bounce=0, gray=0, dp=0;
                 
-                // 阴影
-                if (cfg.enableShadow) {
-                    ctx.save();
-                    ctx.translate(cx, cy);
-                    ctx.scale((cfg.shadowScale||1)*scaleRef*(1-bounce/120), 0.3*scaleRef);
-                    ctx.fillStyle = `rgba(0,0,0,${cfg.shadowOpacity||0.2})`;
-                    ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill();
-                    ctx.restore();
+                if(currentState === 'DEATH') {
+                    const cycle = Math.sin(t * cfg.wobbleSpeed - Math.PI/2);
+                    dp = Math.min(Math.max((cycle+0.8)/1.8,0),1);
+                    sy = 1 - dp * cfg.stretchAmount; sx = 1 + dp * cfg.squashAmount;
+                    if(dp>0 && dp<0.95) {
+                        const shk = Math.sin(t * (cfg.jitterSpeed||1)) * ((1-dp)*(cfg.jitterIntensity||0));
+                        rot = shk * Math.PI/180; cx += Math.cos(t*10)*shk*0.5;
+                    }
+                    rot += dp * cfg.rotationMax * Math.PI/180; gray = dp*100;
+                } else {
+                    const sin = Math.sin(t * cfg.wobbleSpeed), abs = Math.abs(sin);
+                    sx = 1 + sin * cfg.squashAmount; sy = 1 - sin * cfg.stretchAmount;
+                    if(cfg.landSquash) { const imp = Math.pow(1-abs,3); sy -= imp*cfg.landSquash; sx += imp*cfg.landSquash*1.5; }
+                    rot = Math.cos(t * cfg.wobbleSpeed) * cfg.rotationMax * Math.PI/180;
+                    bounce = abs * cfg.bounceHeight;
                 }
 
-                // 角色
+                const scale = Math.min(w,h)/200, bPx = bounce*scale, drawSz = Math.min(w,h)*0.8;
+                
+                if(cfg.enableShadow) {
+                    ctx.save(); ctx.translate(cx, cy);
+                    ctx.scale(cfg.shadowScale*scale*(1-bounce/120)*(currentState==='DEATH'?sx:1), 0.3*scale);
+                    ctx.fillStyle = `rgba(0,0,0,${cfg.shadowOpacity*(currentState==='DEATH' && cfg.shatterIntensity>0 ? 1-dp : 1)})`;
+                    ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill(); ctx.restore();
+                }
+
                 ctx.save();
                 if(gray>0) ctx.filter = `grayscale(${gray}%)`;
-                ctx.translate(cx, cy - bouncePx);
-                ctx.rotate(rot);
-                ctx.scale(sx, sy);
-                
-                const drawSize = Math.min(w,h)*0.8;
-                
-                if(currentState === 'DEATH' && cfg.shatterIntensity > 0 && deathP > 0) {
-                     // 简单碎片绘制
-                     const shards = shardCache.current.length ? shardCache.current : generateShards(img.width, img.height);
-                     shards.forEach(shard => {
-                         const mult = deathP * cfg.shatterIntensity * 5;
-                         const tx = shard.velocity.x * mult;
-                         const ty = shard.velocity.y * mult;
-                         const tr = shard.rotationSpeed * deathP * (Math.PI/180);
-                         if ((1 - deathP*1.5) <= 0) return;
-                         ctx.save();
-                         ctx.globalAlpha = 1 - deathP*1.5;
-                         ctx.translate(tx, ty);
-                         ctx.rotate(tr);
-                         // 简化：直接画缩小版代替碎片剪裁，为了性能和代码量
-                         ctx.drawImage(img, -drawSize/8, -drawSize/8, drawSize/4, drawSize/4); 
+                ctx.translate(cx, cy-bPx); ctx.rotate(rot); ctx.scale(sx,sy);
+
+                if(currentState==='DEATH' && cfg.shatterIntensity>0 && dp>0) {
+                     const shards = shardCache.current.length ? shardCache.current : generateShards(img.width,img.height);
+                     shards.forEach(s => {
+                         if(1-dp*1.5 <= 0) return;
+                         ctx.save(); ctx.globalAlpha = 1-dp*1.5;
+                         const m = dp * cfg.shatterIntensity * 5;
+                         const ratio = drawSz/img.width;
+                         ctx.translate(s.velocity.x*m + s.center.x*ratio, s.velocity.y*m + s.center.y*ratio);
+                         ctx.rotate(s.rotSpd*dp*Math.PI/180);
+                         // 简化绘制，不进行复杂clip，直接画小图
+                         ctx.drawImage(img, -drawSz/8, -drawSz/8, drawSz/4, drawSz/4);
                          ctx.restore();
                      });
                 } else {
-                    ctx.drawImage(img, -drawSize/2, -drawSize, drawSize, drawSize);
+                    ctx.drawImage(img, -drawSz/2, -drawSz, drawSz, drawSz);
                 }
                 ctx.restore();
             };
 
-            // 导出功能
             useImperativeHandle(ref, () => ({
                 download: () => {
-                    const img = processedImageRef.current || originalImageRef.current;
+                    const img = processedRef.current || imgRef.current;
                     const { cellWidth, cellHeight, frameCount, layout } = exportConfig;
-                    const cols = layout === 'HORIZONTAL' ? frameCount : Math.ceil(Math.sqrt(frameCount));
-                    const rows = layout === 'HORIZONTAL' ? 1 : Math.ceil(frameCount/cols);
-                    const cvs = document.createElement('canvas');
-                    cvs.width = cols * cellWidth; cvs.height = rows * cellHeight;
-                    const ctx = cvs.getContext('2d');
-                    const totalTime = (Math.PI*2) / (config.wobbleSpeed||1);
-                    
+                    const cols = layout==='HORIZONTAL'?frameCount:Math.ceil(Math.sqrt(frameCount)), rows = Math.ceil(frameCount/cols);
+                    const cvs = document.createElement('canvas'); cvs.width = cols*cellWidth; cvs.height = rows*cellHeight;
+                    const ctx = cvs.getContext('2d'), tt = (Math.PI*2)/(config.wobbleSpeed||1);
                     for(let i=0; i<frameCount; i++) {
-                        const t = (i/frameCount) * totalTime;
-                        const col = i % cols, row = Math.floor(i/cols);
-                        drawFrame(ctx, img, col*cellWidth + cellWidth/2, row*cellHeight + cellHeight*0.85, cellWidth, cellHeight, t, config);
+                        const t = (i/frameCount)*tt, c=i%cols, r=Math.floor(i/cols);
+                        drawFrame(ctx, img, c*cellWidth+cellWidth/2, r*cellHeight+cellHeight*0.85, cellWidth, cellHeight, t, config);
                     }
-                    const a = document.createElement('a');
-                    a.download = 'potato_sprite.png'; a.href = cvs.toDataURL(); a.click();
+                    const a = document.createElement('a'); a.download = 'potato_sheet.png'; a.href = cvs.toDataURL(); a.click();
                 }
             }));
 
-            // 动画循环
+            useEffect(() => {
+                imgRef.current.src = imageSrc;
+                imgRef.current.onload = () => { processedRef.current = imgRef.current; shardCache.current = generateShards(imgRef.current.width, imgRef.current.height); };
+            }, [imageSrc]);
+
             useEffect(() => {
                 const render = () => {
-                    const cvs = canvasRef.current;
-                    const ctx = cvs?.getContext('2d');
-                    const img = processedImageRef.current || originalImageRef.current;
+                    const cvs = cvsRef.current, ctx = cvs?.getContext('2d'), img = processedRef.current || imgRef.current;
                     if(cvs && ctx && img.complete && img.naturalWidth) {
                         ctx.clearRect(0,0,cvs.width,cvs.height);
-                        
-                        // 背景网格
                         const sz=20;
-                        for(let y=0; y<cvs.height; y+=sz)
-                            for(let x=0; x<cvs.width; x+=sz) {
-                                ctx.fillStyle = ((x+y)/sz)%2===0 ? '#0f172a':'#1e293b';
-                                ctx.fillRect(x,y,sz,sz);
-                            }
-
-                        if(viewMode === 'LIVE') {
+                        for(let y=0; y<cvs.height; y+=sz) for(let x=0; x<cvs.width; x+=sz) { ctx.fillStyle=((x+y)/sz)%2===0?'#0f172a':'#1e293b'; ctx.fillRect(x,y,sz,sz); }
+                        
+                        if(view === 'LIVE') {
                             timeRef.current += 0.016 * config.speed;
                             drawFrame(ctx, img, cvs.width/2, cvs.height/2+80, 250, 250, timeRef.current, config);
                         } else {
-                             // Grid Preview
                              const { frameCount, layout } = exportConfig;
-                             const cols = layout === 'HORIZONTAL' ? frameCount : Math.ceil(Math.sqrt(frameCount));
-                             const rows = Math.ceil(frameCount/cols);
-                             const scale = Math.min(cvs.width/(cols*100), cvs.height/(rows*100), 1) * 0.8;
-                             
-                             ctx.save();
-                             ctx.translate((cvs.width - cols*100*scale)/2, (cvs.height - rows*100*scale)/2);
-                             ctx.scale(scale, scale);
-                             
-                             const totalTime = (Math.PI*2) / (config.wobbleSpeed||1);
+                             const cols = layout==='HORIZONTAL'?frameCount:Math.ceil(Math.sqrt(frameCount)), rows=Math.ceil(frameCount/cols);
+                             const scale = Math.min(cvs.width/(cols*100), cvs.height/(rows*100), 1)*0.8;
+                             ctx.save(); ctx.translate((cvs.width-cols*100*scale)/2, (cvs.height-rows*100*scale)/2); ctx.scale(scale,scale);
+                             const tt = (Math.PI*2)/(config.wobbleSpeed||1);
                              for(let i=0; i<frameCount; i++) {
-                                 const t = (i/frameCount)*totalTime;
-                                 const c = i%cols, r=Math.floor(i/cols);
-                                 ctx.strokeStyle = '#fff3'; ctx.strokeRect(c*100, r*100, 100, 100);
-                                 drawFrame(ctx, img, c*100+50, r*100+85, 100, 100, t, config);
+                                 const c=i%cols, r=Math.floor(i/cols);
+                                 ctx.strokeStyle='#fff3'; ctx.strokeRect(c*100,r*100,100,100);
+                                 drawFrame(ctx, img, c*100+50, r*100+85, 100, 100, (i/frameCount)*tt, config);
                              }
                              ctx.restore();
                         }
                     }
-                    requestRef.current = requestAnimationFrame(render);
+                    reqRef.current = requestAnimationFrame(render);
                 };
-                requestRef.current = requestAnimationFrame(render);
-                return () => cancelAnimationFrame(requestRef.current);
-            }, [viewMode, config, exportConfig, imageSrc, currentState]);
+                reqRef.current = requestAnimationFrame(render);
+                return () => cancelAnimationFrame(reqRef.current);
+            }, [view, config, exportConfig, imageSrc, currentState]);
 
             return (
-                <div className="relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 flex items-center justify-center">
-                    <div className="absolute top-4 right-4 z-10 flex gap-2">
-                        <button onClick={()=>setViewMode('LIVE')} className={`px-3 py-1 rounded text-xs font-bold ${viewMode==='LIVE'?'bg-blue-600':'bg-slate-700 text-slate-400'}`}>预览</button>
-                        <button onClick={()=>setViewMode('SHEET')} className={`px-3 py-1 rounded text-xs font-bold ${viewMode==='SHEET'?'bg-blue-600':'bg-slate-700 text-slate-400'}`}>网格</button>
+                <div className="relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-inner">
+                    <div className="absolute top-4 left-4 z-10 bg-slate-800/80 px-2 py-1 rounded text-xs text-slate-400 font-mono pointer-events-none">
+                        {exportConfig.cellWidth}x{exportConfig.cellHeight} / {exportConfig.frameCount}帧 {exportConfig.chromaKey.enabled && '(去背)'}
                     </div>
-                    <canvas ref={canvasRef} width={800} height={600} className="w-full h-full object-contain" />
+                    <div className="absolute top-4 right-4 z-10 flex gap-2">
+                        <button onClick={()=>setView('LIVE')} className={`px-3 py-1 rounded text-xs font-bold ${view==='LIVE'?'bg-blue-600':'bg-slate-700 hover:bg-slate-600'}`}>预览</button>
+                        <button onClick={()=>setView('SHEET')} className={`px-3 py-1 rounded text-xs font-bold ${view==='SHEET'?'bg-blue-600':'bg-slate-700 hover:bg-slate-600'}`}>网格</button>
+                    </div>
+                    <canvas ref={cvsRef} width={800} height={600} className="w-full h-full object-contain" />
                 </div>
             );
         });
 
-        // --- 主程序 ---
+        // --- 主应用 ---
         const App = () => {
             const [currentState, setCurrentState] = useState('IDLE');
             const [config, setConfig] = useState(DEFAULT_CONFIGS.IDLE);
-            const [exportConfig, setExportConfig] = useState({ layout: 'GRID', cellWidth: 256, cellHeight: 256, frameCount: 16, chromaKey: {enabled:false, color:'#00ff00', tolerance:20} });
+            const [exportConfig, setExportConfig] = useState(DEFAULT_EXPORT_CONFIG);
             const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_key')||'');
             const [prompt, setPrompt] = useState('');
             const [spriteUrl, setSpriteUrl] = useState(DEFAULT_POTATO_SVG);
             const [loading, setLoading] = useState(false);
-            const canvasRef = useRef();
+            const [bg, setBg] = useState('Green Screen (Hex #00FF00)');
+            const cvsRef = useRef();
 
-            const switchState = (s) => {
+            const onStateChange = (s) => {
                 setCurrentState(s);
-                setConfig(prev => ({ ...DEFAULT_CONFIGS[s], enableShadow: prev.enableShadow }));
+                setConfig(prev => ({...DEFAULT_CONFIGS[s], enableShadow: prev.enableShadow}));
             };
 
-            const doGenerate = async () => {
+            const doGen = async () => {
                 setLoading(true);
                 try {
                     localStorage.setItem('gemini_key', apiKey);
-                    const url = await generateSprite(apiKey, prompt, 'Green Screen', 512);
+                    const url = await generateSprite(apiKey, prompt, bg, 512);
                     setSpriteUrl(url);
-                    setExportConfig(p => ({...p, chromaKey: {...p.chromaKey, enabled: true}}));
+                    if(bg.includes('#00FF00')) setExportConfig(c=>({...c, chromaKey:{...c.chromaKey, enabled:true, color:'#00ff00'}}));
                 } catch(e) { alert(e.message); }
                 setLoading(false);
             };
 
             return (
-                <div className="flex flex-col h-screen text-xs md:text-sm">
-                    {/* 头部 */}
-                    <div className="h-14 border-b border-slate-800 flex items-center px-4 justify-between bg-slate-900 shrink-0">
-                        <div className="flex items-center gap-2 font-bold text-lg">
-                            <span className="text-yellow-500"><Sparkles className="w-5 h-5"/></span>
-                            PotatoAnimator <span className="text-slate-500 text-xs font-normal mt-1">Lite</span>
-                        </div>
-                        <a href="https://github.com/lxy57124/PotatoAnimator" className="text-slate-400 hover:text-white">GitHub</a>
-                    </div>
-
+                <div className="h-screen flex flex-col text-sm text-slate-200">
+                    <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center px-4 justify-between shrink-0">
+                        <div className="flex items-center gap-2 font-bold text-lg"><span className="text-yellow-500"><Sparkles className="w-5 h-5"/></span> PotatoAnimator</div>
+                        <a href="https://github.com/lxy57124/PotatoAnimator" className="text-slate-400 hover:text-white text-xs">GitHub</a>
+                    </header>
                     <div className="flex-1 flex overflow-hidden">
-                        {/* 左侧控制栏 */}
-                        <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col overflow-y-auto p-4 gap-4 shrink-0">
-                            <div className="space-y-2">
-                                <label className="text-slate-400 font-bold">API Key</label>
-                                <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white outline-none focus:border-blue-500" placeholder="Paste Gemini Key here" />
+                        <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col p-4 gap-4 overflow-y-auto">
+                            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-md space-y-3">
+                                <h3 className="text-xs font-bold text-slate-400 flex items-center gap-2"><ImageIcon className="w-4 h-4"/> 资源生成</h3>
+                                <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs" placeholder="Gemini API Key"/>
+                                <div className="flex gap-1">
+                                    <input type="text" value={prompt} onChange={e=>setPrompt(e.target.value)} className="flex-1 bg-slate-900 border border-slate-700 rounded p-2 text-xs" placeholder="描述角色..."/>
+                                    <button onClick={doGen} disabled={loading} className="bg-blue-600 px-3 rounded font-bold text-xs disabled:opacity-50">{loading?<span className="spinner"></span>:'生成'}</button>
+                                </div>
+                                <select value={bg} onChange={e=>setBg(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-slate-400">
+                                    {["Pure White","Green Screen (Hex #00FF00)","Blue Screen","Black Screen"].map(o=><option key={o} value={o}>{o}</option>)}
+                                </select>
+                                <input type="file" className="block w-full text-slate-500 text-xs file:mr-2 file:py-1 file:px-2 file:rounded-full file:border-0 file:bg-slate-700 file:text-blue-400" onChange={e=>{if(e.target.files[0]){const r=new FileReader();r.onload=v=>setSpriteUrl(v.target.result);r.readAsDataURL(e.target.files[0]);}}}/>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-slate-400 font-bold">Prompt (生成图片)</label>
-                                <div className="flex gap-2">
-                                    <input type="text" value={prompt} onChange={e=>setPrompt(e.target.value)} className="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-white outline-none" placeholder="e.g. Cute mushroom warrior" />
-                                    <button onClick={doGenerate} disabled={loading} className="bg-blue-600 px-3 rounded font-bold text-white disabled:opacity-50">
-                                        {loading ? <span className="spinner"></span> : '生成'}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="border-t border-slate-800 pt-4 space-y-2">
-                                <label className="text-slate-400 font-bold">上传本地图片</label>
-                                <input type="file" className="block w-full text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-blue-400 hover:file:bg-slate-700" onChange={e => {
-                                    if(e.target.files[0]) {
-                                        const r = new FileReader();
-                                        r.onload=ev=>setSpriteUrl(ev.target.result);
-                                        r.readAsDataURL(e.target.files[0]);
-                                    }
-                                }}/>
-                            </div>
-                            
-                            <div className="border-t border-slate-800 pt-4">
-                                <label className="text-slate-400 font-bold block mb-2">动画状态</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {Object.keys(AnimationState).map(k => (
-                                        <button key={k} onClick={()=>switchState(k)} className={`py-1.5 rounded border border-slate-700 ${currentState===k?'bg-yellow-500 text-black border-yellow-500':'text-slate-300 hover:bg-slate-800'}`}>
-                                            {k}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="border-t border-slate-800 pt-4 space-y-3">
-                                <label className="text-slate-400 font-bold">参数调整</label>
-                                <div>
-                                    <div className="flex justify-between text-slate-400"><span>速度</span><span>{config.speed}</span></div>
-                                    <input type="range" min="0" max="20" step="0.1" value={config.speed} onChange={e=>setConfig({...config, speed: parseFloat(e.target.value)})} className="w-full accent-blue-500"/>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between text-slate-400"><span>挤压 (Squash)</span><span>{config.squashAmount}</span></div>
-                                    <input type="range" min="0" max="0.5" step="0.01" value={config.squashAmount} onChange={e=>setConfig({...config, squashAmount: parseFloat(e.target.value)})} className="w-full accent-green-500"/>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between text-slate-400"><span>旋转 (Rotation)</span><span>{config.rotationMax}</span></div>
-                                    <input type="range" min="0" max="90" step="1" value={config.rotationMax} onChange={e=>setConfig({...config, rotationMax: parseFloat(e.target.value)})} className="w-full accent-red-500"/>
-                                </div>
+                            <div className="flex-1 min-h-0">
+                                <ControlPanel config={config} setConfig={setConfig} currentState={currentState} onStateChange={onStateChange} exportConfig={exportConfig} setExportConfig={setExportConfig}/>
                             </div>
                         </div>
-
-                        {/* 右侧画布 */}
                         <div className="flex-1 bg-slate-950 p-4 flex flex-col gap-4">
-                            <CanvasPreview ref={canvasRef} imageSrc={spriteUrl} config={config} exportConfig={exportConfig} currentState={currentState} />
-                            
-                            <div className="h-16 bg-slate-900 border border-slate-800 rounded-xl flex items-center px-4 justify-between shrink-0">
-                                <div className="flex gap-4 items-center">
-                                    <div className="text-slate-400">导出设置:</div>
-                                    <select value={exportConfig.frameCount} onChange={e=>setExportConfig({...exportConfig, frameCount:parseInt(e.target.value)})} className="bg-slate-800 border border-slate-700 rounded p-1 text-white">
-                                        <option value="8">8 帧</option>
-                                        <option value="16">16 帧</option>
-                                        <option value="32">32 帧</option>
-                                    </select>
-                                    <label className="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
-                                        <input type="checkbox" checked={exportConfig.chromaKey.enabled} onChange={e=>setExportConfig({...exportConfig, chromaKey:{...exportConfig.chromaKey, enabled:e.target.checked}})} />
-                                        去除绿幕
-                                    </label>
+                            <CanvasPreview ref={cvsRef} imageSrc={spriteUrl} config={config} exportConfig={exportConfig} currentState={currentState}/>
+                            <div className="h-14 bg-slate-900 border border-slate-800 rounded-xl flex items-center px-4 justify-between shrink-0 shadow-lg">
+                                <div className="flex items-center gap-2 text-xs text-slate-400">
+                                    <Info className="w-4 h-4 text-blue-400"/>
+                                    <span>导出提示：Unity中使用 Slice Type: Grid By Cell Size</span>
                                 </div>
-                                <button onClick={()=>canvasRef.current.download()} className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded font-bold flex items-center gap-2">
-                                    <Download className="w-4 h-4"/> 下载 PNG 图集
-                                </button>
+                                <button onClick={()=>cvsRef.current.download()} className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow"><Download className="w-4 h-4"/> 下载图集</button>
                             </div>
                         </div>
                     </div>
